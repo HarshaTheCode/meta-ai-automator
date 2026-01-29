@@ -33,6 +33,8 @@ const CONFIG = {
     MAX_DELAY: 15000,       // 15 seconds maximum between items
     TIMEOUT: 120000,        // 2 minutes timeout per generation
     POLL_INTERVAL: 500,     // Check every 500ms for completion
+    BUTTON_ENABLE_TIMEOUT: 60000,  // 60 seconds max wait for button to enable
+    BUTTON_CHECK_INTERVAL: 300,    // Check every 300ms for button state
 
     // DOM Selectors - Multiple fallbacks for each element
     SELECTORS: {
@@ -66,9 +68,11 @@ const CONFIG = {
             'button[aria-label="Generate"]',
             '[aria-label="Submit"][role="button"]'
         ],
-        // Multiple selectors for Send button
+        // Multiple selectors for Send/Animate button (primary selector based on dev tools)
         sendBtnSelectors: [
+            'div[role="button"][aria-label="Send"]',
             'div[aria-label="Send"][role="button"]',
+            '.x1ed109x.x1n2onr6.xh8yej3 div[role="button"][aria-label="Send"]',
             'button[aria-label="Send"]',
             '[aria-label="Send message"][role="button"]'
         ],
@@ -513,41 +517,203 @@ async function simulateDragDrop(file) {
 }
 
 /**
- * Click the Create or Send button
+ * Find the Send/Animate button element
  */
-async function clickGenerate() {
-    // Try Create button selectors first
-    let btn = await findElementFromSelectors(CONFIG.SELECTORS.createBtnSelectors, 3);
+function findSendButton() {
+    // Primary selector based on dev tools analysis
+    let btn = document.querySelector('div[role="button"][aria-label="Send"]');
+    if (btn) return btn;
 
-    if (!btn) {
-        // Fallback to Send button selectors
-        btn = await findElementFromSelectors(CONFIG.SELECTORS.sendBtnSelectors, 3);
+    // Try other selectors
+    for (const selector of CONFIG.SELECTORS.sendBtnSelectors) {
+        btn = document.querySelector(selector);
+        if (btn) return btn;
     }
 
-    if (!btn) {
-        throw new Error('Could not find Create or Send button');
-    }
-
-    // Check if button is disabled
-    if (btn.getAttribute('aria-disabled') === 'true') {
-        log('Button is disabled, waiting...');
-        await sleep(1000);
-    }
-
-    btn.click();
-    log('Clicked generate button');
+    return null;
 }
 
 /**
- * Wait for generation to complete
- * Uses MutationObserver to detect when download button appears
+ * Check if the Send/Animate button is enabled (glowing/active)
+ * The button is enabled when aria-disabled is NOT 'true'
  */
-function waitForCompletion() {
+function isSendButtonEnabled(btn) {
+    if (!btn) return false;
+    const disabled = btn.getAttribute('aria-disabled');
+    return disabled !== 'true';
+}
+
+/**
+ * Wait for the Send/Animate button to become enabled (glowing)
+ * Uses MutationObserver to detect when aria-disabled changes from 'true' to 'false'
+ */
+function waitForSendButtonEnabled() {
     return new Promise((resolve, reject) => {
         const startTime = Date.now();
 
-        // Set up interval to check for completion
-        const checkInterval = setInterval(async () => {
+        // First check if button is already enabled
+        const btn = findSendButton();
+        if (btn && isSendButtonEnabled(btn)) {
+            log('Send button is already enabled!');
+            resolve(btn);
+            return;
+        }
+
+        log('Waiting for Send button to become enabled (image upload processing)...');
+
+        // Set up interval to check for button state
+        const checkInterval = setInterval(() => {
+            // Check for timeout
+            if (Date.now() - startTime > CONFIG.BUTTON_ENABLE_TIMEOUT) {
+                clearInterval(checkInterval);
+                if (buttonObserver) {
+                    buttonObserver.disconnect();
+                }
+                reject(new Error('Timeout waiting for Send button to enable (image upload may have failed)'));
+                return;
+            }
+
+            // Check for stop signal
+            if (shouldStop) {
+                clearInterval(checkInterval);
+                if (buttonObserver) {
+                    buttonObserver.disconnect();
+                }
+                reject(new Error('Stopped by user'));
+                return;
+            }
+
+            // Check button state
+            const currentBtn = findSendButton();
+            if (currentBtn && isSendButtonEnabled(currentBtn)) {
+                clearInterval(checkInterval);
+                if (buttonObserver) {
+                    buttonObserver.disconnect();
+                }
+                log('Send button is now enabled! (aria-disabled changed)');
+                resolve(currentBtn);
+                return;
+            }
+        }, CONFIG.BUTTON_CHECK_INTERVAL);
+
+        // Also use MutationObserver for faster detection
+        let buttonObserver = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                // Check if aria-disabled attribute changed
+                if (mutation.type === 'attributes' && mutation.attributeName === 'aria-disabled') {
+                    const currentBtn = findSendButton();
+                    if (currentBtn && isSendButtonEnabled(currentBtn)) {
+                        clearInterval(checkInterval);
+                        buttonObserver.disconnect();
+                        log('Send button enabled detected via MutationObserver!');
+                        resolve(currentBtn);
+                        return;
+                    }
+                }
+
+                // Also check for any DOM changes that might add the enabled button
+                if (mutation.type === 'childList') {
+                    const currentBtn = findSendButton();
+                    if (currentBtn && isSendButtonEnabled(currentBtn)) {
+                        clearInterval(checkInterval);
+                        buttonObserver.disconnect();
+                        log('Send button enabled detected via DOM change!');
+                        resolve(currentBtn);
+                        return;
+                    }
+                }
+            }
+        });
+
+        // Observe the document for attribute changes and child list changes
+        buttonObserver.observe(document.body, {
+            attributes: true,
+            attributeFilter: ['aria-disabled'],
+            childList: true,
+            subtree: true
+        });
+    });
+}
+
+/**
+ * Click the Send/Animate button
+ * ONLY targets the Send button with aria-label="Send"
+ * Waits for button to become enabled (glowing) before clicking
+ */
+async function clickAnimateButton() {
+    log('Looking for Send/Animate button...');
+
+    // ONLY use the Send button - do NOT use Create button
+    // Wait for Send button to become enabled (glowing) after image upload
+    log('Waiting for Send button to become enabled (image upload processing)...');
+
+    sendToSidebar({
+        type: 'PROGRESS_UPDATE',
+        current: -1,
+        total: -1,
+        status: 'Waiting for button to glow...'
+    });
+
+    const btn = await waitForSendButtonEnabled();
+
+    if (!btn) {
+        throw new Error('Could not find Send/Animate button or it never became enabled');
+    }
+
+    // Double-check button is enabled before clicking
+    if (btn.getAttribute('aria-disabled') === 'true') {
+        log('Button still shows disabled, waiting more...');
+        await waitForSendButtonEnabled();
+    }
+
+    // Small delay to ensure UI is fully ready
+    await sleep(500);
+
+    // Log button state before clicking
+    const ariaDisabled = btn.getAttribute('aria-disabled');
+    log(`Send button aria-disabled = "${ariaDisabled}" - clicking now!`);
+
+    // Click the button
+    btn.click();
+    log('✓ Clicked Send/Animate button!');
+
+    // Wait a moment for the click to register
+    await sleep(500);
+
+    return btn;
+}
+
+/**
+ * Wait for video generation to complete
+ * 
+ * Strategy: After clicking Send button, the button becomes disabled again.
+ * We wait for the generation to finish by:
+ * 1. Detecting when the Send button becomes disabled (generation started)
+ * 2. Then waiting a fixed time for generation (since we can't reliably detect completion)
+ * 3. Or watching for new video elements to appear
+ */
+async function waitForGenerationComplete() {
+    log('Waiting for video generation to complete...');
+
+    const startTime = Date.now();
+
+    // First, verify the Send button is now disabled (generation started)
+    await sleep(1000);
+    const sendBtn = findSendButton();
+    if (sendBtn) {
+        const isDisabled = sendBtn.getAttribute('aria-disabled') === 'true';
+        log(`Send button is now disabled: ${isDisabled} (generation should be in progress)`);
+    }
+
+    // Count existing video elements before we started
+    const initialVideoCount = document.querySelectorAll('video').length;
+    log(`Initial video count on page: ${initialVideoCount}`);
+
+    // Wait for either:
+    // 1. A new video element to appear
+    // 2. Or timeout
+    return new Promise((resolve, reject) => {
+        const checkInterval = setInterval(() => {
             // Check for timeout
             if (Date.now() - startTime > CONFIG.TIMEOUT) {
                 clearInterval(checkInterval);
@@ -555,7 +721,8 @@ function waitForCompletion() {
                     currentObserver.disconnect();
                     currentObserver = null;
                 }
-                reject(new Error('Generation timeout (2 minutes)'));
+                log('Generation timeout - proceeding to next item');
+                resolve(null); // Don't reject, just move on
                 return;
             }
 
@@ -570,47 +737,47 @@ function waitForCompletion() {
                 return;
             }
 
-            // Check for download button
-            const downloadBtn = document.querySelector(CONFIG.SELECTORS.downloadBtn);
-            if (downloadBtn) {
+            // Check if a new video appeared
+            const currentVideoCount = document.querySelectorAll('video').length;
+            if (currentVideoCount > initialVideoCount) {
                 clearInterval(checkInterval);
                 if (currentObserver) {
                     currentObserver.disconnect();
                     currentObserver = null;
                 }
-                log('Generation complete - download button found');
-                resolve(downloadBtn);
+                log(`✓ New video detected! (${initialVideoCount} -> ${currentVideoCount})`);
+
+                // Wait a bit for video to fully load
+                setTimeout(() => resolve(true), 2000);
                 return;
             }
 
-            // Check if loading spinner disappeared
-            const spinner = document.querySelector(CONFIG.SELECTORS.loadingSpinner);
-            if (!spinner) {
-                // Wait a bit more to ensure completion
-                await sleep(1000);
-                const downloadBtnAfterWait = document.querySelector(CONFIG.SELECTORS.downloadBtn);
-                if (downloadBtnAfterWait) {
-                    clearInterval(checkInterval);
-                    if (currentObserver) {
-                        currentObserver.disconnect();
-                        currentObserver = null;
-                    }
-                    log('Generation complete - loading finished');
-                    resolve(downloadBtnAfterWait);
-                    return;
+            // Also check if the Send button becomes enabled again (might indicate completion or error)
+            const currentSendBtn = findSendButton();
+            if (currentSendBtn && !isSendButtonEnabled(currentSendBtn)) {
+                // Still generating...
+            } else if (currentSendBtn && isSendButtonEnabled(currentSendBtn) && Date.now() - startTime > 10000) {
+                // Button became enabled again after at least 10 seconds - generation might be done
+                clearInterval(checkInterval);
+                if (currentObserver) {
+                    currentObserver.disconnect();
+                    currentObserver = null;
                 }
+                log('Send button enabled again - generation may be complete');
+                resolve(true);
+                return;
             }
         }, CONFIG.POLL_INTERVAL);
 
-        // Also set up MutationObserver for faster detection
+        // MutationObserver to detect new video elements faster
         currentObserver = new MutationObserver((mutations) => {
-            const downloadBtn = document.querySelector(CONFIG.SELECTORS.downloadBtn);
-            if (downloadBtn) {
+            const currentVideoCount = document.querySelectorAll('video').length;
+            if (currentVideoCount > initialVideoCount) {
                 clearInterval(checkInterval);
                 currentObserver.disconnect();
                 currentObserver = null;
-                log('Generation complete - detected via observer');
-                resolve(downloadBtn);
+                log(`✓ New video detected via observer! (${initialVideoCount} -> ${currentVideoCount})`);
+                setTimeout(() => resolve(true), 2000);
             }
         });
 
@@ -642,45 +809,72 @@ async function triggerDownload(downloadBtn) {
 
 /**
  * Process a single item (image + prompt)
+ * 
+ * Flow:
+ * 1. Upload image (via clipboard paste)
+ * 2. Set prompt text
+ * 3. Wait for Send/Animate button to become enabled (glowing)
+ * 4. Click the Send/Animate button
+ * 5. Wait for video generation to complete
+ * 6. Move to next item
  */
 async function processItem(imageData, prompt, index, total) {
+    log(`\n========================================`);
     log(`Processing item ${index + 1}/${total}`);
+    log(`Image: ${imageData.name}`);
+    log(`Prompt: ${prompt.substring(0, 50)}...`);
+    log(`========================================\n`);
 
     sendToSidebar({
         type: 'PROGRESS_UPDATE',
         current: index + 1,
         total: total,
-        status: 'Uploading image'
+        status: 'Uploading image...'
     });
 
     // Step 1: Upload image
+    log('Step 1: Uploading image...');
     await uploadImage(imageData);
+    log('✓ Image upload initiated');
 
-    // Step 2: Set prompt
-    await setPromptText(prompt);
+    // Step 2: Set prompt (optional - some users may not want prompt)
+    if (prompt && prompt.trim().length > 0) {
+        log('Step 2: Setting prompt text...');
+        await setPromptText(prompt);
+        log('✓ Prompt set');
+    }
 
-    // Step 3: Click generate
-    await clickGenerate();
-
+    // Step 3: Wait for Send button to glow and click it
+    log('Step 3: Waiting for Send/Animate button to become enabled...');
     sendToSidebar({
         type: 'PROGRESS_UPDATE',
         current: index + 1,
         total: total,
-        status: 'Generating...'
+        status: 'Waiting for button to activate...'
     });
 
-    // Step 4: Wait for completion
-    const downloadBtn = await waitForCompletion();
+    await clickAnimateButton();
+    log('✓ Animate button clicked');
 
-    // Step 5: Download result
-    if (downloadBtn) {
-        await triggerDownload(downloadBtn);
-    }
+    // Step 4: Wait for generation to complete
+    log('Step 4: Waiting for video generation...');
+    sendToSidebar({
+        type: 'PROGRESS_UPDATE',
+        current: index + 1,
+        total: total,
+        status: 'Generating video...'
+    });
 
+    await waitForGenerationComplete();
+    log('✓ Generation complete (or timed out)');
+
+    // Mark item complete
     sendToSidebar({
         type: 'ITEM_COMPLETE',
         index: index
     });
+
+    log(`✓ Item ${index + 1}/${total} completed!\n`);
 
     // Update storage
     await chrome.storage.local.set({ currentIndex: index + 1 });
