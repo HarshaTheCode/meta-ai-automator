@@ -162,6 +162,22 @@ function base64ToFile(base64Data, fileName, mimeType) {
 }
 
 /**
+ * Convert base64 data URL to Blob
+ */
+function base64ToBlob(base64Data, mimeType) {
+    const parts = base64Data.split(',');
+    const byteString = atob(parts[1]);
+    const arrayBuffer = new ArrayBuffer(byteString.length);
+    const uint8Array = new Uint8Array(arrayBuffer);
+
+    for (let i = 0; i < byteString.length; i++) {
+        uint8Array[i] = byteString.charCodeAt(i);
+    }
+
+    return new Blob([uint8Array], { type: mimeType });
+}
+
+/**
  * Send message to sidebar
  */
 function sendToSidebar(message) {
@@ -219,96 +235,279 @@ async function setPromptText(text) {
 }
 
 /**
- * Upload image via the Add Media button
+ * Upload image via clipboard paste into the prompt input
+ * This bypasses the need for file dialog which requires user activation
  */
 async function uploadImage(imageData) {
-    const addMediaBtn = await findElementFromSelectors(CONFIG.SELECTORS.addMediaBtnSelectors);
+    log(`Starting image upload for: ${imageData.name}`);
 
-    if (!addMediaBtn) {
-        throw new Error('Could not find Add Media button');
+    // Find the prompt input (contenteditable div)
+    const promptInput = await findElementFromSelectors(CONFIG.SELECTORS.promptInputSelectors);
+
+    if (!promptInput) {
+        throw new Error('Could not find prompt input for image paste');
     }
 
-    // Create file from base64 data
-    const file = base64ToFile(imageData.data, imageData.name, imageData.type);
+    // Focus the input first
+    promptInput.focus();
+    await sleep(300);
 
-    // Create a hidden file input
-    let fileInput = document.querySelector('input[type="file"][data-automator="true"]');
-    if (!fileInput) {
-        fileInput = document.createElement('input');
-        fileInput.type = 'file';
-        fileInput.accept = 'image/*';
-        fileInput.style.display = 'none';
-        fileInput.setAttribute('data-automator', 'true');
-        document.body.appendChild(fileInput);
-    }
+    // Convert base64 to blob
+    const blob = base64ToBlob(imageData.data, imageData.type);
 
-    // Create DataTransfer to set files
+    // Create a File from the blob
+    const file = new File([blob], imageData.name, { type: imageData.type });
+
+    // Create DataTransfer with the file
     const dataTransfer = new DataTransfer();
     dataTransfer.items.add(file);
-    fileInput.files = dataTransfer.files;
 
-    // Click the Add Media button to open file dialog
-    addMediaBtn.click();
+    // Method 1: Try using Clipboard API to write and then dispatch paste
+    try {
+        // Create ClipboardItem
+        const clipboardItem = new ClipboardItem({
+            [imageData.type]: blob
+        });
 
-    await sleep(500);
+        // Write to clipboard
+        await navigator.clipboard.write([clipboardItem]);
+        log('Image written to clipboard');
 
-    // Look for the actual file input that Meta AI creates
-    const metaFileInput = document.querySelector('input[type="file"][accept*="image"]');
+        await sleep(200);
 
-    if (metaFileInput) {
-        // Set files on the actual input
-        metaFileInput.files = dataTransfer.files;
+        // Now simulate Ctrl+V paste
+        promptInput.focus();
 
-        // Dispatch change event
-        metaFileInput.dispatchEvent(new Event('change', { bubbles: true }));
+        // Dispatch paste event
+        const pasteEvent = new ClipboardEvent('paste', {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: dataTransfer
+        });
 
-        log(`Uploaded image: ${imageData.name}`);
-    } else {
-        // Fallback: try drag and drop simulation
-        log('File input not found, trying alternative upload method...');
-        await simulateDragDrop(file);
+        // Since ClipboardEvent doesn't allow setting clipboardData directly,
+        // we need to use a different approach
+        const customPasteEvent = new Event('paste', { bubbles: true, cancelable: true });
+        Object.defineProperty(customPasteEvent, 'clipboardData', {
+            value: {
+                files: dataTransfer.files,
+                items: dataTransfer.items,
+                types: ['Files'],
+                getData: () => ''
+            }
+        });
+
+        promptInput.dispatchEvent(customPasteEvent);
+        log('Dispatched paste event');
+
+        await sleep(1500);
+
+        // Check if upload was successful
+        if (await waitForImagePreview()) {
+            log(`Successfully uploaded image via clipboard: ${imageData.name}`);
+            return;
+        }
+    } catch (e) {
+        log(`Clipboard API failed: ${e.message}`, 'error');
     }
 
-    // Wait for preview to load
-    await sleep(1500);
+    // Method 2: Try direct paste event with DataTransfer
+    try {
+        log('Trying direct paste event method...');
+        promptInput.focus();
+        await sleep(100);
+
+        // Create a more comprehensive paste event
+        const inputEvent = new InputEvent('beforeinput', {
+            bubbles: true,
+            cancelable: true,
+            inputType: 'insertFromPaste',
+            dataTransfer: dataTransfer
+        });
+        promptInput.dispatchEvent(inputEvent);
+
+        await sleep(1500);
+
+        if (await waitForImagePreview()) {
+            log(`Successfully uploaded image via beforeinput: ${imageData.name}`);
+            return;
+        }
+    } catch (e) {
+        log(`Direct paste event failed: ${e.message}`, 'error');
+    }
+
+    // Method 3: Try drag and drop on the prompt input itself
+    try {
+        log('Trying drag and drop on prompt input...');
+        await simulateDragDropOnElement(promptInput, file);
+        await sleep(2000);
+
+        if (await waitForImagePreview()) {
+            log(`Successfully uploaded image via drag-drop: ${imageData.name}`);
+            return;
+        }
+    } catch (e) {
+        log(`Drag drop on input failed: ${e.message}`, 'error');
+    }
+
+    // Method 4: Try clicking Add Media and looking for hidden input
+    log('Trying Add Media button method as last resort...');
+    const addMediaBtn = await findElementFromSelectors(CONFIG.SELECTORS.addMediaBtnSelectors, 3);
+
+    if (addMediaBtn) {
+        // Look for any file inputs that might already exist
+        const existingInputs = document.querySelectorAll('input[type="file"]');
+
+        for (const input of existingInputs) {
+            try {
+                input.files = dataTransfer.files;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                await sleep(1000);
+
+                if (await waitForImagePreview(1000)) {
+                    log(`Uploaded via existing input: ${imageData.name}`);
+                    return;
+                }
+            } catch (e) {
+                // continue to next input
+            }
+        }
+    }
+
+    log('All upload methods attempted - proceeding with generation', 'error');
+}
+
+/**
+ * Wait for image preview to appear (indicates successful upload)
+ */
+async function waitForImagePreview(timeout = 3000) {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeout) {
+        // Look for common image preview indicators
+        const previewSelectors = [
+            'img[src*="blob:"]',
+            'img[src*="data:image"]',
+            '[aria-label*="preview" i]',
+            '[aria-label*="Remove" i][role="button"]',  // Remove button appears when image is uploaded
+            '[aria-label*="image" i][role="img"]',
+            '.image-preview',
+            '[data-testid*="image"]',
+            'div[style*="background-image"]'
+        ];
+
+        for (const selector of previewSelectors) {
+            const preview = document.querySelector(selector);
+            if (preview) {
+                log('Image preview detected');
+                return true;
+            }
+        }
+
+        await sleep(200);
+    }
+
+    return false;
+}
+
+/**
+ * Simulate drag and drop specifically on an element
+ */
+async function simulateDragDropOnElement(element, file) {
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(file);
+
+    Object.defineProperty(dataTransfer, 'dropEffect', { value: 'copy', writable: true });
+    Object.defineProperty(dataTransfer, 'effectAllowed', { value: 'all', writable: true });
+
+    // Dispatch drag events on the specific element
+    element.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer }));
+    await sleep(50);
+
+    element.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer }));
+    await sleep(50);
+
+    element.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer }));
+
+    log('Drag-drop dispatched on element');
 }
 
 /**
  * Simulate drag and drop for file upload
+ * Enhanced to find proper drop zones on Meta AI
  */
 async function simulateDragDrop(file) {
-    const dropZone = document.querySelector('.x1n2onr6') || document.body;
-
     const dataTransfer = new DataTransfer();
     dataTransfer.items.add(file);
 
+    // Set proper drop effect
+    Object.defineProperty(dataTransfer, 'dropEffect', {
+        value: 'copy',
+        writable: true
+    });
+    Object.defineProperty(dataTransfer, 'effectAllowed', {
+        value: 'all',
+        writable: true
+    });
+
+    // Try to find the best drop zone - look for common container patterns
+    const dropZoneSelectors = [
+        '[aria-label*="media" i]',
+        '[aria-label*="upload" i]',
+        '[role="main"]',
+        '.x1n2onr6',
+        '[data-testid*="composer"]',
+        '[contenteditable="true"]',
+        'main',
+        '#root',
+        'body'
+    ];
+
+    let dropZone = null;
+    for (const selector of dropZoneSelectors) {
+        dropZone = document.querySelector(selector);
+        if (dropZone) {
+            log(`Using drop zone: ${selector}`);
+            break;
+        }
+    }
+
+    dropZone = dropZone || document.body;
+
     // Dispatch dragenter
-    const dragEnterEvent = new DragEvent('dragenter', {
+    dropZone.dispatchEvent(new DragEvent('dragenter', {
         bubbles: true,
         cancelable: true,
         dataTransfer
-    });
-    dropZone.dispatchEvent(dragEnterEvent);
+    }));
 
     await sleep(100);
 
-    // Dispatch dragover
-    const dragOverEvent = new DragEvent('dragover', {
-        bubbles: true,
-        cancelable: true,
-        dataTransfer
-    });
-    dropZone.dispatchEvent(dragOverEvent);
+    // Dispatch dragover multiple times (some sites need this)
+    for (let i = 0; i < 3; i++) {
+        dropZone.dispatchEvent(new DragEvent('dragover', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer
+        }));
+        await sleep(50);
+    }
 
     await sleep(100);
 
     // Dispatch drop
-    const dropEvent = new DragEvent('drop', {
+    dropZone.dispatchEvent(new DragEvent('drop', {
         bubbles: true,
         cancelable: true,
         dataTransfer
-    });
-    dropZone.dispatchEvent(dropEvent);
+    }));
+
+    // Also dispatch dragleave for cleanup
+    dropZone.dispatchEvent(new DragEvent('dragleave', {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer
+    }));
 
     log('Simulated drag and drop');
 }
