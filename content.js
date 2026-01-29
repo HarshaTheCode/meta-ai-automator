@@ -266,31 +266,13 @@ async function uploadImage(imageData) {
     const dataTransfer = new DataTransfer();
     dataTransfer.items.add(file);
 
-    // Method 1: Try using Clipboard API to write and then dispatch paste
+    // Method 1: Try direct paste event with DataTransfer (skipping Clipboard API to avoid focus errors)
     try {
-        // Create ClipboardItem
-        const clipboardItem = new ClipboardItem({
-            [imageData.type]: blob
-        });
-
-        // Write to clipboard
-        await navigator.clipboard.write([clipboardItem]);
-        log('Image written to clipboard');
-
-        await sleep(200);
-
-        // Now simulate Ctrl+V paste
+        log('Using direct paste event method...');
         promptInput.focus();
+        await sleep(100);
 
-        // Dispatch paste event
-        const pasteEvent = new ClipboardEvent('paste', {
-            bubbles: true,
-            cancelable: true,
-            clipboardData: dataTransfer
-        });
-
-        // Since ClipboardEvent doesn't allow setting clipboardData directly,
-        // we need to use a different approach
+        // Create a custom paste event with file data
         const customPasteEvent = new Event('paste', { bubbles: true, cancelable: true });
         Object.defineProperty(customPasteEvent, 'clipboardData', {
             value: {
@@ -308,16 +290,16 @@ async function uploadImage(imageData) {
 
         // Check if upload was successful
         if (await waitForImagePreview()) {
-            log(`Successfully uploaded image via clipboard: ${imageData.name}`);
+            log(`Successfully uploaded image via paste: ${imageData.name}`);
             return;
         }
     } catch (e) {
-        log(`Clipboard API failed: ${e.message}`, 'error');
+        log(`Paste event failed: ${e.message}`, 'error');
     }
 
-    // Method 2: Try direct paste event with DataTransfer
+    // Method 2: Try beforeinput event with DataTransfer
     try {
-        log('Trying direct paste event method...');
+        log('Trying beforeinput event method...');
         promptInput.focus();
         await sleep(100);
 
@@ -337,7 +319,7 @@ async function uploadImage(imageData) {
             return;
         }
     } catch (e) {
-        log(`Direct paste event failed: ${e.message}`, 'error');
+        log(`Beforeinput event failed: ${e.message}`, 'error');
     }
 
     // Method 3: Try drag and drop on the prompt input itself
@@ -756,8 +738,8 @@ async function waitForGenerationComplete() {
             const currentSendBtn = findSendButton();
             if (currentSendBtn && !isSendButtonEnabled(currentSendBtn)) {
                 // Still generating...
-            } else if (currentSendBtn && isSendButtonEnabled(currentSendBtn) && Date.now() - startTime > 10000) {
-                // Button became enabled again after at least 10 seconds - generation might be done
+            } else if (currentSendBtn && isSendButtonEnabled(currentSendBtn) && Date.now() - startTime > 3000) {
+                // Button became enabled again after at least 3 seconds - generation might be done
                 clearInterval(checkInterval);
                 if (currentObserver) {
                     currentObserver.disconnect();
