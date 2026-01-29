@@ -1,67 +1,120 @@
 /* === Base Reset & Variables === */
+:root {
+    /* "Soft Minimal" Palette */
+    --bg-primary: #FFFFFF;
+    /* High contrast inner elements (inputs) */
+    --bg-main: #F3EAE5;
+    /* Light Blush - Main background to reduce white dominance */
+
+    /* Text Colors */
+    --text-primary: #060709;
+    /* Rich Black */
+    --text-body: rgba(6, 7, 9, 0.85);
+    --text-muted: rgba(6, 7, 9, 0.6);
+
+    /* Accents */
+    --accent: #9DD0C7;
+    /* Mint */
+    --accent-hover: #8BC1B7;
+    --warning: #F3CEC0;
+    /* Peach */
+    --warning-hover: #E5BDB0;
+
+    --border-color: rgba(6, 7, 9, 0.06);
+    --radius: 12px;
+    /* Increased radius for the softer look */
+}
+
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
 }
 
-:root {
-    --bg-primary: #000;
-    --bg-secondary: #111;
-    --bg-tertiary: #1a1a1a;
-    --text-primary: #fff;
-    --text-secondary: #999;
-    --accent: #fff;
-    --danger: #ff4444;
-    --success: #44ff44;
-    --border: #333;
-}
-
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    line-height: 1.5;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-main);
+    /* CHANGED: Blush background */
+    color: var(--text-body);
+    line-height: 1.6;
     min-height: 100vh;
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
 }
 
 /* === Layout === */
 .container {
-    padding: 16px;
+    padding: 24px;
     max-width: 100%;
 }
 
+/* === Header === */
 header {
-    text-align: center;
     margin-bottom: 24px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(6, 7, 9, 0.05);
 }
 
 header h1 {
-    font-size: 18px;
-    font-weight: 600;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
     margin-bottom: 4px;
+    color: var(--text-primary);
 }
 
 .subtitle {
-    font-size: 12px;
-    color: var(--text-secondary);
+    font-size: 14px;
+    color: var(--text-muted);
+    font-weight: 500;
 }
 
+/* === Sections === */
 .section {
-    margin-bottom: 20px;
+    margin-bottom: 24px;
 }
 
 /* === Labels === */
 .label {
     display: block;
-    font-size: 12px;
-    font-weight: 500;
+    font-size: 11px;
+    font-weight: 700;
     margin-bottom: 8px;
-    color: var(--text-secondary);
+    color: var(--text-body);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.8px;
+    opacity: 0.8;
+}
+
+/* === Inputs & Textareas === */
+.textarea {
+    width: 100%;
+    padding: 16px;
+    font-size: 14px;
+    border: none;
+    /* Removed border for clean look */
+    border-radius: var(--radius);
+    background: var(--bg-primary);
+    /* CHANGED: White input on Blush bg */
+    color: var(--text-primary);
+    resize: vertical;
+    min-height: 140px;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    line-height: 1.5;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+    /* Subtle lift */
+}
+
+.textarea:focus {
+    outline: none;
+    box-shadow: 0 4px 12px rgba(157, 208, 199, 0.3);
+    /* Mint glow */
+}
+
+.textarea::placeholder {
+    color: var(--text-muted);
+    opacity: 0.6;
 }
 
 /* === Buttons === */
@@ -69,141 +122,153 @@ header h1 {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 10px 16px;
-    font-size: 13px;
-    font-weight: 500;
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    gap: 10px;
+    padding: 16px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    border-radius: var(--radius);
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     width: 100%;
+    letter-spacing: 0.3px;
+    position: relative;
+    overflow: hidden;
 }
 
 .btn:disabled {
-    opacity: 0.5;
+    opacity: 0.6;
     cursor: not-allowed;
+    filter: saturate(0.5);
 }
 
+/* Primary: Mint with Black Text (Signature Look) */
 .btn-primary {
-    background: var(--text-primary);
-    color: var(--bg-primary);
-    border-color: var(--text-primary);
+    background: var(--accent);
+    color: var(--text-primary);
+    box-shadow: 0 4px 12px rgba(157, 208, 199, 0.2);
 }
 
 .btn-primary:hover:not(:disabled) {
-    background: #ddd;
+    background: var(--accent-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(157, 208, 199, 0.4);
 }
 
+.btn-primary:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+/* Secondary: White Card Look */
 .btn-secondary {
-    background: var(--bg-secondary);
+    background: var(--bg-primary);
+    /* White */
     color: var(--text-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
 }
 
 .btn-secondary:hover:not(:disabled) {
-    background: var(--bg-tertiary);
+    background: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
 }
 
+/* Danger: Peach */
 .btn-danger {
-    background: var(--bg-secondary);
-    color: var(--danger);
-    border-color: var(--danger);
+    background: var(--warning);
+    color: #3E2F2F;
+    box-shadow: 0 4px 12px rgba(243, 206, 192, 0.2);
 }
 
 .btn-danger:hover:not(:disabled) {
-    background: #220000;
+    background: var(--warning-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(243, 206, 192, 0.4);
 }
 
 /* === Controls Grid === */
 .controls {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: 16px;
 }
 
-/* === Textarea === */
-.textarea {
-    width: 100%;
-    padding: 12px;
-    font-size: 13px;
-    font-family: 'Monaco', 'Menlo', monospace;
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    resize: vertical;
-    min-height: 120px;
-}
-
-.textarea:focus {
-    outline: none;
-    border-color: var(--text-primary);
-}
-
-.textarea::placeholder {
-    color: var(--text-secondary);
-}
-
-/* === Count Badge === */
+/* === Status Badges === */
 .count-badge {
     margin-top: 8px;
     font-size: 12px;
-    color: var(--text-secondary);
+    color: var(--text-muted);
+    text-align: right;
+    font-weight: 600;
 }
 
 /* === Progress === */
 .progress-container {
-    height: 6px;
-    background: var(--bg-secondary);
-    border-radius: 3px;
+    height: 8px;
+    background: rgba(6, 7, 9, 0.05);
+    /* Darker track for visibility on blush */
+    border-radius: 10px;
     overflow: hidden;
+    margin-top: 12px;
 }
 
 .progress-bar {
     height: 100%;
     background: var(--text-primary);
-    transition: width 0.3s;
+    /* Solid black bar */
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .progress-text {
-    margin-top: 8px;
-    font-size: 12px;
-    color: var(--text-secondary);
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--text-primary);
     text-align: center;
+    font-weight: 600;
 }
 
 /* === Log === */
 .log-container {
-    max-height: 200px;
+    max-height: 220px;
     overflow-y: auto;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 8px;
+    background: var(--bg-primary);
+    /* White background card */
+    border-radius: var(--radius);
+    padding: 16px;
     font-family: 'Monaco', 'Menlo', monospace;
     font-size: 11px;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
 }
 
 .log-entry {
-    padding: 4px 0;
-    border-bottom: 1px solid var(--border);
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+    color: var(--text-body);
 }
 
 .log-entry:last-child {
     border-bottom: none;
 }
 
+.log-entry .time {
+    color: var(--text-muted);
+    margin-right: 8px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
 .log-entry.error {
-    color: var(--danger);
+    color: var(--text-primary);
+    border-left: 3px solid var(--warning);
+    padding-left: 12px;
+    background: linear-gradient(to right, rgba(243, 206, 192, 0.15), transparent);
 }
 
 .log-entry.success {
-    color: var(--success);
-}
-
-.log-entry .time {
-    color: var(--text-secondary);
-    margin-right: 8px;
+    color: var(--text-primary);
+    border-left: 3px solid var(--accent);
+    padding-left: 12px;
 }
 
 /* === Wrong Site Warning Overlay === */
@@ -213,8 +278,9 @@ header h1 {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.9);
-    backdrop-filter: blur(10px);
+    background: rgba(243, 234, 229, 0.85);
+    /* Blush tint overlay */
+    backdrop-filter: blur(12px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -227,50 +293,72 @@ header h1 {
 
 .warning-content {
     text-align: center;
-    padding: 32px;
+    padding: 48px;
+    background: #FFFFFF;
+    border-radius: 24px;
+    box-shadow: 0 20px 60px rgba(6, 7, 9, 0.1);
+    max-width: 85%;
 }
 
 .warning-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
+    font-size: 32px;
+    margin-bottom: 20px;
+    color: var(--warning);
 }
 
 .warning-content h2 {
     font-size: 20px;
-    font-weight: 600;
+    font-weight: 800;
     margin-bottom: 12px;
-    color: var(--danger);
+    color: var(--text-primary);
 }
 
 .warning-content p {
-    font-size: 14px;
-    color: var(--text-secondary);
-    margin-bottom: 8px;
-}
-
-.url-hint {
-    margin-top: 16px !important;
+    font-size: 15px;
+    color: var(--text-body);
+    margin-bottom: 32px;
+    line-height: 1.6;
 }
 
 .meta-link {
     display: inline-block;
-    margin-top: 8px;
-    padding: 10px 20px;
+    padding: 16px 32px;
     background: var(--text-primary);
-    color: var(--bg-primary);
+    color: white;
     text-decoration: none;
-    border-radius: 6px;
-    font-weight: 500;
-    transition: background 0.2s;
+    border-radius: 100px;
+    font-weight: 600;
+    transition: all 0.2s;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
 }
 
 .meta-link:hover {
-    background: #ddd;
+    transform: translateY(-3px);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
 }
 
 /* Blur the main container when overlay is shown */
 .container.blurred {
-    filter: blur(5px);
+    filter: blur(10px);
+    opacity: 0.5;
     pointer-events: none;
     user-select: none;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(6, 7, 9, 0.1);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(6, 7, 9, 0.2);
 }

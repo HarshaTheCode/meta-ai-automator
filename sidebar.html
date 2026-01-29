@@ -1,23 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Meta AI Automator</title>
   <link rel="stylesheet" href="sidebar.css">
 </head>
+
 <body>
   <!-- Warning overlay for wrong website -->
   <div id="wrongSiteOverlay" class="wrong-site-overlay hidden">
     <div class="warning-content">
-      <div class="warning-icon">⚠️</div>
+      <div class="warning-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+      </div>
       <h2>Wrong Website</h2>
       <p>This extension only works on Meta AI.</p>
       <p class="url-hint">Please navigate to:</p>
       <a href="https://www.meta.ai/media" target="_blank" class="meta-link">meta.ai/media</a>
     </div>
   </div>
-  
+
   <div class="container" id="mainContainer">
     <header>
       <h1>Meta AI Automator</h1>
@@ -29,7 +38,11 @@
       <label for="imageInput" class="label">Select Images (20-30)</label>
       <input type="file" id="imageInput" accept="image/*" multiple hidden>
       <button id="selectImagesBtn" class="btn btn-secondary">
-        📁 Select Images
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+        </svg>
+        Select Images
       </button>
       <div id="imageCount" class="count-badge">0 images selected</div>
     </section>
@@ -45,8 +58,20 @@ Match order with images"></textarea>
 
     <!-- Controls -->
     <section class="section controls">
-      <button id="startBtn" class="btn btn-primary">▶ Start Automation</button>
-      <button id="stopBtn" class="btn btn-danger" disabled>⏹ Stop</button>
+      <button id="startBtn" class="btn btn-primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
+        Start Automation
+      </button>
+      <button id="stopBtn" class="btn btn-danger" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+        </svg>
+        Stop
+      </button>
     </section>
 
     <!-- Progress -->
@@ -66,4 +91,5 @@ Match order with images"></textarea>
 
   <script src="sidebar.js"></script>
 </body>
+
 </html>
