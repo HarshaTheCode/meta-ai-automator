@@ -76,6 +76,12 @@ const CONFIG = {
             'button[aria-label="Send"]',
             '[aria-label="Send message"][role="button"]'
         ],
+        // Mode toggle (Image/Video) selectors
+        modeToggleSelectors: [
+            'div[role="button"][aria-label="Image"]',
+            'div[role="button"][aria-label="Video"]',
+            'div#_r_7d_[role="button"]'
+        ],
         // Download button detection
         downloadBtn: 'a[download], div[aria-label="Download"][role="button"], button[aria-label="Download"], [aria-label*="download" i][role="button"]',
         // Loading indicator
@@ -515,6 +521,118 @@ function findSendButton() {
     return null;
 }
 
+// ============================================================================
+// MODE DETECTION FUNCTIONS (Image/Video Toggle)
+// ============================================================================
+
+/**
+ * Get the current mode (Image or Video) from the toggle button
+ * @returns {Promise<'Image'|'Video'|null>} Current mode or null if not found
+ */
+async function getCurrentMode() {
+    // Look for the mode toggle button by checking both possible states
+    const imageBtn = document.querySelector('div[role="button"][aria-label="Image"]');
+    if (imageBtn) return 'Image';
+
+    const videoBtn = document.querySelector('div[role="button"][aria-label="Video"]');
+    if (videoBtn) return 'Video';
+
+    // Fallback: try the dynamic ID selector
+    const dynamicBtn = document.querySelector('div#_r_7d_[role="button"]');
+    if (dynamicBtn) {
+        return dynamicBtn.getAttribute('aria-label');
+    }
+
+    return null;
+}
+
+/**
+ * Find the Video option in the dropdown menu after clicking the mode toggle
+ * @returns {Promise<Element|null>} Video option element or null
+ */
+async function findVideoOption() {
+    // Wait a moment for dropdown to appear
+    await sleep(300);
+
+    // Look for any menu item containing "Video" text
+    const allMenuItems = document.querySelectorAll('[role="menuitem"], [role="option"], [role="menu"] div[role="button"]');
+    for (const item of allMenuItems) {
+        const text = item.textContent || item.innerText || '';
+        if (text.trim() === 'Video' || item.getAttribute('aria-label') === 'Video') {
+            log('Found Video option in dropdown');
+            return item;
+        }
+    }
+
+    // Fallback: look for aria-label
+    const fallback = document.querySelector('[aria-label="Video"][role="menuitem"]') ||
+        document.querySelector('[aria-label="Video"][role="option"]');
+    if (fallback) {
+        log('Found Video option via fallback selector');
+        return fallback;
+    }
+
+    return null;
+}
+
+/**
+ * Ensure the Meta AI is in Video mode before pasting images
+ * If currently in Image mode, switch to Video mode
+ * @returns {Promise<boolean>} true if now in Video mode, false if failed
+ */
+async function ensureVideoMode() {
+    log('Checking current mode (Image/Video)...');
+
+    const currentMode = await getCurrentMode();
+    log(`Current mode detected: ${currentMode}`);
+
+    if (currentMode === 'Video') {
+        log('✓ Already in Video mode');
+        return true;
+    }
+
+    if (currentMode === 'Image') {
+        log('Currently in Image mode, switching to Video...');
+
+        // Click the mode toggle button to open dropdown
+        const modeButton = document.querySelector('div[role="button"][aria-label="Image"]');
+        if (!modeButton) {
+            log('Could not find Image mode toggle button', 'error');
+            return false;
+        }
+
+        modeButton.click();
+        log('Clicked mode toggle button, waiting for dropdown...');
+        await sleep(500);
+
+        // Look for Video option in the dropdown
+        const videoOption = await findVideoOption();
+        if (!videoOption) {
+            log('Could not find Video option in dropdown', 'error');
+            // Try pressing Escape to close dropdown
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            return false;
+        }
+
+        videoOption.click();
+        log('Clicked Video option');
+        await sleep(500);
+
+        // Verify the switch was successful
+        const newMode = await getCurrentMode();
+        if (newMode === 'Video') {
+            log('✓ Successfully switched to Video mode');
+            return true;
+        } else {
+            log(`Failed to switch to Video mode (current: ${newMode})`, 'error');
+            return false;
+        }
+    }
+
+    log(`Unknown or missing mode state: ${currentMode}`, 'error');
+    return false;
+}
+
 /**
  * Check if the Send/Animate button is enabled (glowing/active)
  * The button is enabled when aria-disabled is NOT 'true'
@@ -806,6 +924,20 @@ async function processItem(imageData, prompt, index, total) {
     log(`Image: ${imageData.name}`);
     log(`Prompt: ${prompt.substring(0, 50)}...`);
     log(`========================================\n`);
+
+    // Step 0: Ensure we're in Video mode (not Image mode)
+    sendToSidebar({
+        type: 'PROGRESS_UPDATE',
+        current: index + 1,
+        total: total,
+        status: 'Checking mode...'
+    });
+
+    log('Step 0: Ensuring Video mode is active...');
+    const modeOk = await ensureVideoMode();
+    if (!modeOk) {
+        log('Warning: Could not verify Video mode, proceeding anyway...', 'error');
+    }
 
     sendToSidebar({
         type: 'PROGRESS_UPDATE',
