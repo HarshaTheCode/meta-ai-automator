@@ -1,0 +1,10 @@
+# OS Metadata
+.DS_Store
+Thumbs.db
+
+# Extension specific
+*.log
+.vscode/
+.idea/
+node_modules/
+package-lock.json
