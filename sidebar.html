@@ -7,7 +7,18 @@
   <link rel="stylesheet" href="sidebar.css">
 </head>
 <body>
-  <div class="container">
+  <!-- Warning overlay for wrong website -->
+  <div id="wrongSiteOverlay" class="wrong-site-overlay hidden">
+    <div class="warning-content">
+      <div class="warning-icon">⚠️</div>
+      <h2>Wrong Website</h2>
+      <p>This extension only works on Meta AI.</p>
+      <p class="url-hint">Please navigate to:</p>
+      <a href="https://www.meta.ai/media" target="_blank" class="meta-link">meta.ai/media</a>
+    </div>
+  </div>
+  
+  <div class="container" id="mainContainer">
     <header>
       <h1>Meta AI Automator</h1>
       <p class="subtitle">Image to Video Generator</p>

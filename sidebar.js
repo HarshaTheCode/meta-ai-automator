@@ -20,15 +20,65 @@ const stopBtn = document.getElementById('stopBtn');
 const progressBar = document.getElementById('progressBar');
 const progressText = document.getElementById('progressText');
 const logContainer = document.getElementById('logContainer');
+const wrongSiteOverlay = document.getElementById('wrongSiteOverlay');
+const mainContainer = document.getElementById('mainContainer');
 
 // State
 let selectedFiles = [];
 let isRunning = false;
 
 /**
+ * Check if current tab is on Meta AI website
+ * @returns {Promise<boolean>} true if on meta.ai
+ */
+async function checkIfOnMetaSite() {
+    try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab && tab.url) {
+            return tab.url.includes('meta.ai');
+        }
+        return false;
+    } catch (error) {
+        console.error('Error checking site:', error);
+        return false;
+    }
+}
+
+/**
+ * Show or hide the wrong site warning overlay
+ * @param {boolean} isOnMetaSite - Whether user is on Meta AI
+ */
+function updateSiteWarning(isOnMetaSite) {
+    if (isOnMetaSite) {
+        wrongSiteOverlay.classList.add('hidden');
+        mainContainer.classList.remove('blurred');
+    } else {
+        wrongSiteOverlay.classList.remove('hidden');
+        mainContainer.classList.add('blurred');
+    }
+}
+
+/**
  * Initialize sidebar - load any existing queue state
  */
 async function init() {
+    // Check if on Meta AI website
+    const isOnMetaSite = await checkIfOnMetaSite();
+    updateSiteWarning(isOnMetaSite);
+
+    // Listen for tab changes to update warning
+    chrome.tabs.onActivated.addListener(async () => {
+        const onMeta = await checkIfOnMetaSite();
+        updateSiteWarning(onMeta);
+    });
+
+    chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
+        if (changeInfo.url) {
+            const onMeta = await checkIfOnMetaSite();
+            updateSiteWarning(onMeta);
+        }
+    });
+
     // Load existing state from storage
     const state = await chrome.storage.local.get(['queue', 'currentIndex', 'isRunning', 'prompts']);
 
