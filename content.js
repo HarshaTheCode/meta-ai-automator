@@ -970,17 +970,8 @@ async function processItem(imageData, prompt, index, total) {
     await clickAnimateButton();
     log('✓ Animate button clicked');
 
-    // Step 4: Wait for generation to complete
-    log('Step 4: Waiting for video generation...');
-    sendToSidebar({
-        type: 'PROGRESS_UPDATE',
-        current: index + 1,
-        total: total,
-        status: 'Generating video...'
-    });
-
-    await waitForGenerationComplete();
-    log('✓ Generation complete (or timed out)');
+    // NO WAITING: Immediately proceed to next image
+    // Meta AI handles generation in background while we process next image
 
     // Mark item complete
     sendToSidebar({
@@ -988,10 +979,13 @@ async function processItem(imageData, prompt, index, total) {
         index: index
     });
 
-    log(`✓ Item ${index + 1}/${total} completed!\n`);
+    log(`✓ Item ${index + 1}/${total} completed!`);
 
     // Update storage
     await chrome.storage.local.set({ currentIndex: index + 1 });
+
+    // Brief delay to let UI update before next upload
+    await sleep(500);
 }
 
 /**
@@ -1074,20 +1068,6 @@ async function runAutomation() {
 
                 await processItem(imageData, prompts[i], i, totalItems);
 
-                // Add random delay before next item (except for last item)
-                if (i < totalItems - 1) {
-                    const delay = getRandomDelay();
-                    log(`Waiting ${delay / 1000} seconds before next item...`);
-
-                    sendToSidebar({
-                        type: 'PROGRESS_UPDATE',
-                        current: i + 1,
-                        total: totalItems,
-                        status: `Waiting ${Math.round(delay / 1000)}s...`
-                    });
-
-                    await sleep(delay);
-                }
             } catch (error) {
                 log(`Error processing item ${i + 1}: ${error.message}`, 'error');
                 sendToSidebar({
@@ -1099,8 +1079,8 @@ async function runAutomation() {
                 // Skip to next item
                 await chrome.storage.local.set({ currentIndex: i + 1 });
 
-                // Wait a bit before continuing
-                await sleep(3000);
+                // Brief pause before continuing on error
+                await sleep(1000);
             }
         }
 

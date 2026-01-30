@@ -226,6 +226,10 @@ startBtn.addEventListener('click', async () => {
         return;
     }
 
+    // CLEAR OLD DATA: Remove any previous run data before starting fresh
+    await chrome.storage.local.clear();
+    addLogEntry('Cleared previous run data');
+
     // LAZY LOADING: Only store metadata, not full image data
     // This avoids chrome.storage.local quota limits (10MB max)
     const queueMeta = selectedFiles.map(f => ({
