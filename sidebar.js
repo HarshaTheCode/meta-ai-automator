@@ -131,6 +131,24 @@ function handleMessage(message, sender, sendResponse) {
             addLogEntry('⏹ Automation stopped', 'error');
             progressText.textContent = 'Stopped';
             break;
+
+        case 'GET_IMAGE_DATA':
+            // LAZY LOADING: Convert single image to base64 on-demand
+            // This prevents memory exhaustion when handling 30+ images
+            (async () => {
+                const index = message.index;
+                if (index >= 0 && index < selectedFiles.length) {
+                    try {
+                        const imageData = await fileToBase64(selectedFiles[index]);
+                        sendResponse({ success: true, imageData: imageData });
+                    } catch (error) {
+                        sendResponse({ success: false, error: error.message });
+                    }
+                } else {
+                    sendResponse({ success: false, error: 'Invalid index' });
+                }
+            })();
+            return true; // Keep channel open for async response
     }
 }
 
@@ -186,7 +204,8 @@ function fileToBase64(file) {
 }
 
 /**
- * Start automation
+ * Start automation - uses lazy loading to handle 30+ images
+ * Images are converted to base64 one-at-a-time on demand
  */
 startBtn.addEventListener('click', async () => {
     const prompts = getPrompts();
@@ -207,16 +226,23 @@ startBtn.addEventListener('click', async () => {
         return;
     }
 
-    // Convert files to base64 for storage
-    addLogEntry('Preparing images...');
-    const imagesData = await Promise.all(selectedFiles.map(fileToBase64));
+    // LAZY LOADING: Only store metadata, not full image data
+    // This avoids chrome.storage.local quota limits (10MB max)
+    const queueMeta = selectedFiles.map(f => ({
+        name: f.name,
+        size: f.size,
+        type: f.type
+    }));
 
-    // Save queue to storage
+    addLogEntry(`Preparing ${selectedFiles.length} images (lazy loading enabled)...`);
+
+    // Save only metadata and prompts to storage
     await chrome.storage.local.set({
-        queue: imagesData,
+        queueMeta: queueMeta,
         prompts: prompts,
         currentIndex: 0,
         isRunning: true,
+        totalItems: selectedFiles.length,
         logs: []
     });
 

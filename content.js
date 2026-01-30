@@ -995,7 +995,29 @@ async function processItem(imageData, prompt, index, total) {
 }
 
 /**
- * Main automation runner
+ * Request image data from sidebar on-demand (lazy loading)
+ * This prevents memory exhaustion when handling 30+ images
+ */
+async function requestImageData(index) {
+    return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+            { type: 'GET_IMAGE_DATA', index: index },
+            (response) => {
+                if (chrome.runtime.lastError) {
+                    reject(new Error('Could not get image from sidebar: ' + chrome.runtime.lastError.message));
+                } else if (response && response.success) {
+                    resolve(response.imageData);
+                } else {
+                    reject(new Error(response?.error || 'Failed to get image data'));
+                }
+            }
+        );
+    });
+}
+
+/**
+ * Main automation runner - uses lazy loading for images
+ * Images are fetched one-at-a-time from sidebar to prevent memory exhaustion
  */
 async function runAutomation() {
     if (isRunning) {
@@ -1007,21 +1029,24 @@ async function runAutomation() {
     shouldStop = false;
 
     try {
-        // Get queue from storage
-        const state = await chrome.storage.local.get(['queue', 'prompts', 'currentIndex']);
+        // Get queue metadata from storage (NOT full image data)
+        const state = await chrome.storage.local.get(['queueMeta', 'prompts', 'currentIndex', 'totalItems']);
 
-        if (!state.queue || !state.prompts) {
+        // Support both old format (queue) and new format (queueMeta) for backwards compatibility
+        const totalItems = state.totalItems || state.queueMeta?.length || 0;
+
+        if (!state.prompts || totalItems === 0) {
             throw new Error('No queue found in storage');
         }
 
-        const queue = state.queue;
         const prompts = state.prompts;
         const startIndex = state.currentIndex || 0;
 
-        log(`Starting automation from index ${startIndex}, total items: ${queue.length}`);
+        log(`Starting automation from index ${startIndex}, total items: ${totalItems}`);
+        log(`Using lazy loading - images will be fetched one at a time`);
 
-        // Process each item sequentially
-        for (let i = startIndex; i < queue.length; i++) {
+        // Process each item sequentially - request images on-demand
+        for (let i = startIndex; i < totalItems; i++) {
             if (shouldStop) {
                 log('Automation stopped by user');
                 sendToSidebar({ type: 'AUTOMATION_STOPPED' });
@@ -1029,17 +1054,35 @@ async function runAutomation() {
             }
 
             try {
-                await processItem(queue[i], prompts[i], i, queue.length);
+                // LAZY LOADING: Request image data from sidebar for this specific index
+                log(`Requesting image ${i + 1}/${totalItems} from sidebar...`);
+
+                sendToSidebar({
+                    type: 'PROGRESS_UPDATE',
+                    current: i + 1,
+                    total: totalItems,
+                    status: 'Loading image...'
+                });
+
+                const imageData = await requestImageData(i);
+
+                if (!imageData) {
+                    throw new Error('Failed to load image data from sidebar');
+                }
+
+                log(`Image ${i + 1} loaded successfully (${imageData.name})`);
+
+                await processItem(imageData, prompts[i], i, totalItems);
 
                 // Add random delay before next item (except for last item)
-                if (i < queue.length - 1) {
+                if (i < totalItems - 1) {
                     const delay = getRandomDelay();
                     log(`Waiting ${delay / 1000} seconds before next item...`);
 
                     sendToSidebar({
                         type: 'PROGRESS_UPDATE',
                         current: i + 1,
-                        total: queue.length,
+                        total: totalItems,
                         status: `Waiting ${Math.round(delay / 1000)}s...`
                     });
 
